@@ -293,6 +293,34 @@ class Sample(db.Model):
     def __repr__(self):
         return '<Sample %r, pool_size=%r, active=%r, public=%r>' \
             % (self.name, self.pool_size, self.active, self.public)
+            
+class Group(db.Model):
+    """
+    Group (e.g. disease type)
+    """
+    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8"}
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    #: Human readable name
+    name = db.Column(db.String(200))
+    
+    #: date and time of creation
+    added = db.Column(db.DateTime)
+    
+    #: the :class:`User` who created this sample
+    user = db.relationship(User,
+                           backref=db.backref('groups', lazy='dynamic'))
+    
+    def __init__(self, user, name):
+        self.user = user
+        self.name = name
+        self.added = datetime.now()
+        
+    @detached_session_fix
+    def __repr__(self):
+        return '<Group %r>' % (self.name) 
 
 
 class DataSource(db.Model):
