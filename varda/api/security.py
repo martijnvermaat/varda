@@ -220,6 +220,13 @@ def owns_sample(sample=None, **_):
     currently authenticated user.
     """
     return sample is not None and sample.user is g.user
+    
+def owns_group(group=None, **_):
+    """
+    Condition that is satisfied if the view argument `group` is owned by the
+    currently authenticated user.
+    """
+    return group is not None and group.user is g.user
 
 
 def owns_variation(variation=None, **_):

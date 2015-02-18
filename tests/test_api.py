@@ -90,6 +90,11 @@ class TestApi():
         return json.loads(r.data)['root']['user_collection']['uri']
 
     @property
+    def uri_groups(self):
+        r = self.client.get(self.uri_root)
+        return json.loads(r.data)['root']['group_collection']['uri']
+
+    @property
     def uri_tokens(self):
         r = self.client.get(self.uri_root)
         return json.loads(r.data)['root']['token_collection']['uri']
@@ -123,6 +128,13 @@ class TestApi():
     def uri_variants(self):
         r = self.client.get(self.uri_root)
         return json.loads(r.data)['root']['variant_collection']['uri']
+
+    @property
+    def uri_dummy_group(self):
+        if not hasattr(self, "_dummy_group"):
+            return None
+        else:
+            return self._dummy_group
 
     def test_root(self):
         """
@@ -347,8 +359,16 @@ class TestApi():
         Serialized variation can have data source embedded.
         """
         # Create sample
+
+        if not self.uri_dummy_group:
+            r = self.client.post(self.uri_groups, data={"name": "dummy"}, headers=[auth_header()])
+            groups = json.loads(r.data)['group']['uri']
+            self._dummy_group = groups
+        else:
+            groups = self._dummy_group
         data = {'name': 'Test sample',
-                'pool_size': 1}
+                'pool_size': 1,
+                'group': groups}
         r = self.client.post(self.uri_samples, data=json.dumps(data), content_type='application/json', headers=[auth_header(login='trader', password='test')])
         assert_equal(r.status_code, 201)
         sample = json.loads(r.data)['sample']['uri']
@@ -384,9 +404,16 @@ class TestApi():
         """
         A trader can only annotate after importing and activating.
         """
+        if not self.uri_dummy_group:
+            r = self.client.post(self.uri_groups, data={"name": "dummy"}, headers=[auth_header()])
+            groups = json.loads(r.data)['group']['uri']
+            self._dummy_group = groups
+        else:
+            groups = self._dummy_group
         # Create sample
         data = {'name': 'Test sample',
-                'pool_size': 1}
+                'pool_size': 1,
+                'group': groups}
         r = self.client.post(self.uri_samples, data=json.dumps(data), content_type='application/json', headers=[auth_header(login='trader', password='test')])
         assert_equal(r.status_code, 201)
         sample = json.loads(r.data)['sample']['uri']
@@ -401,7 +428,7 @@ class TestApi():
         vcf_data_source = r.headers['Location'].replace('http://localhost', '')
 
         # Annotate observations
-        data = {'data_source': vcf_data_source}
+        data = {'data_source': vcf_data_source, 'group_query': [{'include': ['dummy'], 'exclude': []}]}
         r = self.client.post(self.uri_annotations, data=json.dumps(data), content_type='application/json', headers=[auth_header(login='trader', password='test')])
         assert_equal(r.status_code, 400)
 
@@ -434,7 +461,7 @@ class TestApi():
         assert_equal(r.status_code, 200)
 
         # Annotate observations
-        data = {'data_source': vcf_data_source}
+        data = {'data_source': vcf_data_source, 'group_query': [{'include': ['dummy'], 'exclude': []}]}
         r = self.client.post(self.uri_annotations, data=json.dumps(data), content_type='application/json', headers=[auth_header(login='trader', password='test')])
         assert_equal(r.status_code, 201)
 
@@ -446,7 +473,8 @@ class TestApi():
 
         # Annotate observations
         data = {'data_source': vcf_data_source,
-                'sample_frequency': sample_frequency}
+                'sample_frequency': sample_frequency,
+                'group_query': [{'include': ['dummy'], 'exclude': []}]}
         r = self.client.post(self.uri_annotations, data=json.dumps(data), content_type='application/json', headers=[auth_header()])
         assert_equal(r.status_code, 201)
         annotation = json.loads(r.data)['annotation']['uri']
@@ -472,10 +500,19 @@ class TestApi():
         Import observations and coverage. Return a tuple with URIs for the
         sample, VCF data source, and BED data source.
         """
+        # create group
+        if not self.uri_dummy_group:
+            r = self.client.post(self.uri_groups, data={"name": "dummy"}, headers=[auth_header()])
+            groups = json.loads(r.data)['group']['uri']
+            self._dummy_group = groups
+        else:
+            groups = self._dummy_group
+
         # Create sample
         data = {'name': name,
                 'coverage_profile': bed_file is not None,
-                'pool_size': pool_size}
+                'pool_size': pool_size,
+                'group': groups}
         r = self.client.post(self.uri_samples, data=json.dumps(data), content_type='application/json', headers=[auth_header()])
         assert_equal(r.status_code, 201)
         sample = json.loads(r.data)['sample']['uri']
