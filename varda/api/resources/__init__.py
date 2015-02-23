@@ -15,3 +15,4 @@ from .tokens import TokensResource
 from .users import UsersResource
 from .variants import VariantsResource
 from .variations import VariationsResource
+from .groups import GroupsResource

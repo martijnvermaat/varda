@@ -19,7 +19,8 @@ from .errors import (AcceptError, ActivationFailure, BasicAuthRequiredError,
                      IntegrityError, ValidationError)
 from .resources import (AnnotationsResource, CoveragesResource,
                         DataSourcesResource, SamplesResource, TokensResource,
-                        UsersResource, VariantsResource, VariationsResource)
+                        UsersResource, VariantsResource, VariationsResource,
+                        GroupsResource)
 from .utils import user_by_login, user_by_token
 
 
@@ -215,6 +216,7 @@ coverages_resource = CoveragesResource(api, url_prefix='/coverages')
 data_sources_resource = DataSourcesResource(api, url_prefix='/data_sources')
 annotations_resource = AnnotationsResource(api, url_prefix='/annotations')
 variants_resource = VariantsResource(api, url_prefix='/variants')
+groups_resource = GroupsResource(api, url_prefix='/groups')
 
 
 @api.route('/')
@@ -345,7 +347,8 @@ def root_serialize():
                                  tokens_resource,
                                  users_resource,
                                  variants_resource,
-                                 variations_resource)})
+                                 variations_resource,
+                                 groups_resource)})
     return api
 
 

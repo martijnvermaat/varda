@@ -1,7 +1,7 @@
 from flask import g, url_for
 
-from ..models import Group
-from ..security import is_user, has_role, true
+from ...models import Group
+from ..security import is_user, has_role, true, owns_group
 from .base import ModelResource
 from .users import UsersResource
 
@@ -29,12 +29,12 @@ class GroupsResource(ModelResource):
     
     add_ensure_conditions = [has_role('admin'), has_role('importer')]
     add_ensure_options = {'satisfy': any}
-    add_schema = {'name': {'type': 'string', 'required' = True, 'maxlength': 200}}
+    add_schema = {'name': {'type': 'string', 'required': True, 'maxlength': 200}}
     
     # TODO: add owns_group function to security module
     edit_ensure_conditions = [has_role('admin'), owns_group]
     edit_ensure_options = {'satisfy' : any}
-    edit_schema = {'name': {'type': 'string', 'required' = True, 'maxlength': 200}}
+    edit_schema = {'name': {'type': 'string', 'required': True, 'maxlength': 200}}
     
     # TODO: add owns_group function to security module
     delete_ensure_conditions = [has_role('admin'), owns_group]
