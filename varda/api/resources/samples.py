@@ -13,6 +13,7 @@ from ...models import Sample
 from ..security import is_user, has_role, owns_sample, public_sample, true
 from .base import ModelResource
 from .users import UsersResource
+from .groups import GroupsResource
 
 
 class SamplesResource(ModelResource):
@@ -26,7 +27,8 @@ class SamplesResource(ModelResource):
 
     views = ['list', 'get', 'add', 'edit', 'delete']
 
-    embeddable = {'user': UsersResource}
+    embeddable = {'user': UsersResource,
+                  'group': GroupsResource}
     filterable = {'public': 'boolean',
                   'user': 'user'}
     orderable = ['name', 'pool_size', 'public', 'active', 'added']
@@ -43,7 +45,8 @@ class SamplesResource(ModelResource):
                   'pool_size': {'type': 'integer'},
                   'coverage_profile': {'type': 'boolean'},
                   'public': {'type': 'boolean'},
-                  'notes': {'type': 'string', 'maxlength': 10000}}
+                  'notes': {'type': 'string', 'maxlength': 10000},
+                  'group': {'type': 'group'}}
 
     edit_ensure_conditions = [has_role('admin'), owns_sample]
     edit_ensure_options = {'satisfy': any}
@@ -52,7 +55,8 @@ class SamplesResource(ModelResource):
                    'pool_size': {'type': 'integer'},
                    'coverage_profile': {'type': 'boolean'},
                    'public': {'type': 'boolean'},
-                   'notes': {'type': 'string', 'maxlength': 10000}}
+                   'notes': {'type': 'string', 'maxlength': 10000},
+                   'group': {'type': 'group'}}
 
     delete_ensure_conditions = [has_role('admin'), owns_sample]
     delete_ensure_options = {'satisfy': any}
@@ -89,6 +93,10 @@ class SamplesResource(ModelResource):
         **user** (`object`)
           :ref:`Link <api-links>` to a :ref:`user
           <api-resources-users-instances>` resource (embeddable).
+        
+        **group** (`object`)
+          :ref:`Link <api-links>` to a :ref:`group
+          <api-resources-groups-instances> group (embeddable)
         """
         serialization = super(SamplesResource, cls).serialize(instance, embed=embed)
         serialization.update(name=instance.name,
