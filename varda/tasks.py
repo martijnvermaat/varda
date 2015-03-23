@@ -31,7 +31,7 @@ import vcf
 
 from . import db, celery
 from .models import (Annotation, Coverage, DataSource, DataUnavailable,
-                     Observation, Sample, Region, Variation)
+                     Observation, Sample, Region, Variation, Group)
 from .region_binning import all_bins
 from .utils import (calculate_frequency, digest, NoGenotypesInRecord,
                     normalize_variant, normalize_chromosome, normalize_region,
@@ -232,6 +232,25 @@ def annotate_variants(original_variants, annotated_variants,
             'homozygous.'
             % sample.name)
 
+    for gr in Group.query():
+        reader.infos[gr.name + "_VN"] = VcfInfo(
+            gr.name + "_VN", vcf_field_counts['A'], 'Integer',
+            "Number of individuals having this region covered"
+        )
+        reader.infos[gr.name + "_VF"] = VcfInfo(
+            gr.name + "_VF", vcf_field_counts['A'], 'Float',
+            'Ratio of individuals in which the allele was found'
+        )
+        reader.infos[gr.name + "_VF_HET"] = VcfInfo(
+            gr.name + "_VF_HET", vcf_field_counts['A'], 'Float',
+            'Ratio of individuals in which the allele was observed as heterozygous'
+        )
+        reader.infos[gr.name + "_VF_HOM"] = VcfInfo(
+            gr.name + "_VF_HOM", vcf_field_counts['A'], 'Float',
+            'Ratio of individuals in which the allele was observed as homozygous'
+        )
+
+
     writer = vcf.Writer(annotated_variants, reader, lineterminator='\n')
 
     # Number of lines read (i.e. comparable to what is reported by
@@ -256,6 +275,7 @@ def annotate_variants(original_variants, annotated_variants,
 
         global_result = []
         sample_results = [[] for _ in sample_frequency]
+        group_results = {gr.name: [] for gr in Group.query()}
         for index, allele in enumerate(record.ALT):
             try:
                 chromosome, position, reference, observed = normalize_variant(
@@ -275,6 +295,13 @@ def annotate_variants(original_variants, annotated_variants,
                         chromosome, position, reference, observed,
                         sample=sample, exclude_checksum=exclude_checksum))
 
+            for gr in Group.query():
+                gr_samples = Sample.query().filter_by(group=gr)
+                group_results[gr.name] = calculate_frequency(
+                    chromosome, position, reference, observed,
+                    multi_sample=gr_samples, exclude_checksum=exclude_checksum
+                )
+
         if global_frequency:
             record.add_info('GLOBAL_VN', [vn for vn, _ in global_result])
             record.add_info('GLOBAL_VF', [sum(vf.values()) for _, vf in global_result])
@@ -285,6 +312,11 @@ def annotate_variants(original_variants, annotated_variants,
             record.add_info(label + '_VF', [sum(vf.values()) for _, vf in sample_result])
             record.add_info(label + '_VF_HET', [vf['heterozygous'] for _, vf in sample_result])
             record.add_info(label + '_VF_HOM', [vf['homozygous'] for _, vf in sample_result])
+        for gr_name, gr_result in group_results.iteritems():
+            record.add_info(gr_name + "_VN", [vn for vn, _ in gr_result])
+            record.add_info(gr_name + "_VF", [sum(vf.values()) for _, vf in gr_result])
+            record.add_info(gr_name + "_VF_HET", [vf['heterozygous'] for _, vf in gr_result])
+            record.add_info(gr_name + "_VF_HOM", [vf['homozygous'] for _, vf in gr_result])
 
         writer.write_record(record)
 

@@ -350,7 +350,7 @@ def read_genotype(call, prefer_likelihoods=False):
 
 
 def calculate_frequency(chromosome, position, reference, observed,
-                        sample=None, exclude_checksum=None):
+                        sample=None, exclude_checksum=None, multi_sample=None):
     """
     Calculate frequency for a variant.
 
@@ -396,6 +396,34 @@ def calculate_frequency(chromosome, position, reference, observed,
                 Coverage.sample == sample).count()
         else:
             coverage = sample.pool_size
+
+    elif multi_sample and not sample:
+        observations = 0
+        coverage = 0
+        for s in multi_sample:
+            observations += collections.Counter(dict(
+            db.session.query(Observation.zygosity,
+                          func.sum(Observation.support)).
+            filter(Observation.bin.in_(bins)).
+            filter_by(chromosome=chromosome,
+                      position=position,
+                      reference=reference,
+                      observed=observed).
+            join(Variation).
+            filter_by(sample=sample).
+            join(DataSource).
+            filter(DataSource.checksum != exclude_checksum).
+            group_by(Observation.zygosity)))
+
+        if sample.coverage_profile:
+            coverage += Region.query.join(Coverage).filter(
+                Region.chromosome == chromosome,
+                Region.begin <= position,
+                Region.end >= end_position,
+                Region.bin.in_(bins),
+                Coverage.sample == sample).count()
+        else:
+            coverage += sample.pool_size
 
     else:
         # Frequency over entire database, except:
