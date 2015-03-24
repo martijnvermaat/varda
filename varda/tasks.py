@@ -249,6 +249,22 @@ def annotate_variants(original_variants, annotated_variants,
             gr.name + "_VF_HOM", vcf_field_counts['A'], 'Float',
             'Ratio of individuals in which the allele was observed as homozygous'
         )
+        reader.infos[gr.name + "_INVERSE_VN"] = VcfInfo(
+            gr.name + "_INVERSE_VN", vcf_field_counts['A'], 'Integer',
+            "Number of individuals, not in group, haivng this region covered"
+        )
+        reader.infos[gr.name + "_INVERSE_VF"] = VcfInfo(
+            gr.name + "_INVERSE_VF", vcf_field_counts['A'], 'Float',
+            "Ratio of individuals, not in group, in which the allele was observed"
+        )
+        reader.infos[gr.name + "_INVERSE_VF_HET"] = VcfInfo(
+            gr.name + "_INVERSE_VF_HET", vcf_field_counts['A'], 'Float',
+            "Ratio of individuals, not in group, in which the allele was observed as heterozygous"
+        )
+        reader.infos[gr.name + "_INVERSE_VF_HOM"] = VcfInfo(
+            gr.name + "_INVERSE_VF_HOM", vcf_field_counts['A'], 'Float',
+            "Ratio of individuals, not in group, in which the allele was observed as homozygous"
+        )
 
 
     writer = vcf.Writer(annotated_variants, reader, lineterminator='\n')
@@ -276,6 +292,7 @@ def annotate_variants(original_variants, annotated_variants,
         global_result = []
         sample_results = [[] for _ in sample_frequency]
         group_results = {gr.name: [] for gr in Group.query()}
+        inverse_group_results = {gr.name: [] for gr in Group.query()}
         for index, allele in enumerate(record.ALT):
             try:
                 chromosome, position, reference, observed = normalize_variant(
@@ -296,10 +313,15 @@ def annotate_variants(original_variants, annotated_variants,
                         sample=sample, exclude_checksum=exclude_checksum))
 
             for gr in Group.query():
-                gr_samples = Sample.query().filter_by(group=gr)
+                gr_samples = Sample.query().filter_by(group=gr).filter_by(active=True)
                 group_results[gr.name] = calculate_frequency(
                     chromosome, position, reference, observed,
                     multi_sample=gr_samples, exclude_checksum=exclude_checksum
+                )
+                inverse_group_results[gr.name] = calculate_frequency(
+                    chromosome, position, reference, observed,
+                    multi_sample=gr_samples, exclude_checksum=exclude_checksum,
+                    inverse=True
                 )
 
         if global_frequency:
@@ -317,6 +339,11 @@ def annotate_variants(original_variants, annotated_variants,
             record.add_info(gr_name + "_VF", [sum(vf.values()) for _, vf in gr_result])
             record.add_info(gr_name + "_VF_HET", [vf['heterozygous'] for _, vf in gr_result])
             record.add_info(gr_name + "_VF_HOM", [vf['homozygous'] for _, vf in gr_result])
+        for gr_name, gr_result in inverse_group_results.iteritems():
+            record.add_info(gr_name + "_INVERSE_VN", [vn for vn, _ in gr_result])
+            record.add_info(gr_name + "_INVERSE_VF", [sum(vf.values()) for _, vf in gr_result])
+            record.add_info(gr_name + "_INVERSE_VF_HET", [vf['heterozygous'] for _, vf in gr_result])
+            record.add_info(gr_name + "_INVERSE_VF_HOM", [vf['homozygous'] for _, vf in gr_result])
 
         writer.write_record(record)
 
