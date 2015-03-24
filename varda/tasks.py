@@ -182,6 +182,8 @@ def annotate_variants(original_variants, annotated_variants,
         raise ReadError('Annotated data must be in VCF format')
 
     reader = vcf.Reader(original_variants)
+    groups = Group.query.all()
+    gr_samples = {gr.name: Sample.query.filter_by(group=gr).filter_by(active=True) for gr in groups}
 
     # Header line in VCF output for global frequencies.
     if global_frequency:
@@ -312,15 +314,14 @@ def annotate_variants(original_variants, annotated_variants,
                         chromosome, position, reference, observed,
                         sample=sample, exclude_checksum=exclude_checksum))
 
-            for gr in Group.query.all():
-                gr_samples = Sample.query.filter_by(group=gr).filter_by(active=True)
+            for gr in groups:
                 group_results[gr.name].append(calculate_frequency(
                     chromosome, position, reference, observed,
-                    multi_sample=gr_samples, exclude_checksum=exclude_checksum
+                    multi_sample=gr_samples[gr.name], exclude_checksum=exclude_checksum
                 ))
                 inverse_group_results[gr.name].append(calculate_frequency(
                     chromosome, position, reference, observed,
-                    multi_sample=gr_samples, exclude_checksum=exclude_checksum,
+                    multi_sample=gr_samples[gr.name], exclude_checksum=exclude_checksum,
                     inverse=True
                 ))
 
