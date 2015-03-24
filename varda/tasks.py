@@ -232,7 +232,7 @@ def annotate_variants(original_variants, annotated_variants,
             'homozygous.'
             % sample.name)
 
-    for gr in Group.query():
+    for gr in Group.query.all():
         reader.infos[gr.name + "_VN"] = VcfInfo(
             gr.name + "_VN", vcf_field_counts['A'], 'Integer',
             "Number of individuals having this region covered"
@@ -291,8 +291,8 @@ def annotate_variants(original_variants, annotated_variants,
 
         global_result = []
         sample_results = [[] for _ in sample_frequency]
-        group_results = {gr.name: [] for gr in Group.query()}
-        inverse_group_results = {gr.name: [] for gr in Group.query()}
+        group_results = {gr.name: [] for gr in Group.query.all()}
+        inverse_group_results = {gr.name: [] for gr in Group.query.all()}
         for index, allele in enumerate(record.ALT):
             try:
                 chromosome, position, reference, observed = normalize_variant(
@@ -312,17 +312,17 @@ def annotate_variants(original_variants, annotated_variants,
                         chromosome, position, reference, observed,
                         sample=sample, exclude_checksum=exclude_checksum))
 
-            for gr in Group.query():
-                gr_samples = Sample.query().filter_by(group=gr).filter_by(active=True)
-                group_results[gr.name] = calculate_frequency(
+            for gr in Group.query.all():
+                gr_samples = Sample.query.filter_by(group=gr).filter_by(active=True)
+                group_results[gr.name].append(calculate_frequency(
                     chromosome, position, reference, observed,
                     multi_sample=gr_samples, exclude_checksum=exclude_checksum
-                )
-                inverse_group_results[gr.name] = calculate_frequency(
+                ))
+                inverse_group_results[gr.name].append(calculate_frequency(
                     chromosome, position, reference, observed,
                     multi_sample=gr_samples, exclude_checksum=exclude_checksum,
                     inverse=True
-                )
+                ))
 
         if global_frequency:
             record.add_info('GLOBAL_VN', [vn for vn, _ in global_result])
