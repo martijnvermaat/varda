@@ -196,4 +196,4 @@ class SamplesResource(ModelResource):
         """
         Todo: documentation, including how/if we cascade.
         """
-        return super(SamplersResource, cls).delete_view(*args, **kwargs)
+        return super(SamplesResource, cls).delete_view(*args, **kwargs)
