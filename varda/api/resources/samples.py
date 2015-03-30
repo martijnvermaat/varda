@@ -30,7 +30,9 @@ class SamplesResource(ModelResource):
     embeddable = {'user': UsersResource,
                   'group': GroupsResource}
     filterable = {'public': 'boolean',
-                  'user': 'user'}
+                  'user': 'user',
+                  'is_index': 'boolean',
+                  'group': 'group'}
     orderable = ['name', 'pool_size', 'public', 'active', 'added']
 
     list_ensure_conditions = [has_role('admin'), is_user, true('public')]
@@ -46,7 +48,9 @@ class SamplesResource(ModelResource):
                   'coverage_profile': {'type': 'boolean'},
                   'public': {'type': 'boolean'},
                   'notes': {'type': 'string', 'maxlength': 10000},
-                  'group': {'type': 'group'}}
+                  'group': {'type': 'group'},
+                  'is_index': {'type': 'boolean'},
+                  'parents': {'type': 'sample'}}
 
     edit_ensure_conditions = [has_role('admin'), owns_sample]
     edit_ensure_options = {'satisfy': any}
@@ -56,7 +60,9 @@ class SamplesResource(ModelResource):
                    'coverage_profile': {'type': 'boolean'},
                    'public': {'type': 'boolean'},
                    'notes': {'type': 'string', 'maxlength': 10000},
-                   'group': {'type': 'group'}}
+                   'group': {'type': 'group'},
+                   'is_index': {'type': 'boolean'},
+                   'parents': {'type': 'sample'}}
 
     delete_ensure_conditions = [has_role('admin'), owns_sample]
     delete_ensure_options = {'satisfy': any}
@@ -105,6 +111,9 @@ class SamplesResource(ModelResource):
                              coverage_profile=instance.coverage_profile,
                              active=instance.active,
                              notes=instance.notes,
+                             group=instance.group,
+                             is_index=instance.is_index,
+                             parents=[x.name for x in instance.parents],
                              added=str(instance.added.isoformat()))
         return serialization
 
