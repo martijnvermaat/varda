@@ -183,7 +183,9 @@ def annotate_variants(original_variants, annotated_variants,
 
     reader = vcf.Reader(original_variants)
     groups = Group.query.all()
-    gr_samples = {gr.name: Sample.query.filter_by(group=gr).filter_by(active=True) for gr in groups}
+    # TODO: THIS RETURNS A BASEQUERY ITEM. MUST CALL .all() AFTERWARDS!!
+    # TODO: Plus, if multiple groups exist with same name this will overwrite.
+    gr_samples = {gr.name: Sample.query.filter_by(group=gr).filter_by(active=True).all() for gr in groups}
 
     # Header line in VCF output for global frequencies.
     if global_frequency:
