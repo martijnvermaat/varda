@@ -436,6 +436,9 @@ def annotate_regions(original_regions, annotated_variants,
 
     header_fields = ['CHROMOSOME', 'POSITION', 'REFERENCE', 'OBSERVED']
 
+    groups = Group.query.all()
+    gr_samples = {gr.name: Sample.query.filter_by(group=gr).filter_by(active=True).all() for gr in groups}
+
     # Header line in CSV output for global frequencies.
     if global_frequency:
         header_fields.extend(['GLOBAL_VN', 'GLOBAL_VF', 'GLOBAL_VF_HET',
@@ -479,6 +482,46 @@ def annotate_regions(original_regions, annotated_variants,
         annotated_variants.write(
             '##' + label + '_VF_HOM: Ratio of individuals in %s in which the '
             'allele was observed as homozygous.\n' % sample.name)
+
+    # header lines in CSV output for group frequencies
+    for group in groups:
+        header_fields.extend([group.name + "_VN", group.name + "_VF",
+                              group.name + "_VF_HET", group.name + "_VF_HOM"])
+
+        header_fields.extend([group.name + "_INVERSE_VN", group.name + "_INVERSE_VF",
+                              group.name + "_INVERSE_VF_HET", group.name + "_INVERSE_VF_HOM"])
+
+        annotated_variants.write(
+            "##" + group.name + "_VN: Number of individuals in group"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_VF: Ratio of individuals in group in which "
+                                "the allele was observed"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_VF_HET: Ratio of individuals in group in which"
+                                "the allele was observed as heterozygous"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_VF_HOM: Ratio of individuals in group in which"
+                                "the allele wsa observed as homozygous"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VN: Number of individuals not in group"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VF: Ratio of individuals not in group in which "
+                                "the allele was observed"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VF_HET: Ratio of individuals not in group in which"
+                                "the allele was observed as heterozygous"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VF_HOM: Ratio of individuals not in group in which"
+                                "the allele wsa observed as homozygous"
+        )
+
 
     annotated_variants.write('#' + '\t'.join(header_fields) + '\n')
 
@@ -544,6 +587,24 @@ def annotate_regions(original_regions, annotated_variants,
                     observation.chromosome, observation.position,
                     observation.reference, observation.observed,
                     sample=sample, exclude_checksum=exclude_checksum)
+                fields.extend([vn, sum(vf.values()), vf['heterozygous'],
+                               vf['homozygous']])
+            for gr in groups:
+                vn, vf = calculate_frequency(
+                    observation.chromosome, observation.position,
+                    observation.reference, observation.observed,
+                    multi_sample=gr_samples[gr.name], exclude_checksum=exclude_checksum
+                )
+                fields.extend([vn, sum(vf.values()), vf['heterozygous'],
+                               vf['homozygous']])
+
+            for igr in groups:
+                vn, vf = calculate_frequency(
+                    observation.chromosome, observation.position,
+                    observation.reference, observation.observed,
+                    exclude_checksum=exclude_checksum, multi_sample=gr_samples[igr.name],
+                    inverse=True
+                )
                 fields.extend([vn, sum(vf.values()), vf['heterozygous'],
                                vf['homozygous']])
 
