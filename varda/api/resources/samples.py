@@ -111,9 +111,8 @@ class SamplesResource(ModelResource):
                              coverage_profile=instance.coverage_profile,
                              active=instance.active,
                              notes=instance.notes,
-                             group=instance.group,
                              is_index=instance.is_index,
-                             parents=instance.parents,
+                             parents=[x.id for x in instance.parents],
                              added=str(instance.added.isoformat()))
         return serialization
 
