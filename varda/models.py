@@ -268,7 +268,7 @@ class Sample(db.Model):
     """
     Sample (of one or more individuals).
     """
-    __tablename__ = 'sample'
+    __tablename__ = 'Sample'
     __table_args__ = {'mysql_engine': 'InnoDB', 'mysql_charset': 'utf8'}
 
     id = db.Column(db.Integer, primary_key=True)
@@ -318,7 +318,7 @@ class Sample(db.Model):
 
     #: Classes `Sample` which are parents to this sample
     parents = db.relationship('Sample')
-    child_id = db.Column(db.Integer, db.ForeignKey('sample.id'))
+    child_id = db.Column(db.Integer, db.ForeignKey('Sample.id'))
 
     def __init__(self, user, name, pool_size=1, coverage_profile=True,
                  public=False, notes=None, group=None):

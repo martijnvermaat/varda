@@ -113,7 +113,7 @@ class SamplesResource(ModelResource):
                              notes=instance.notes,
                              group=instance.group,
                              is_index=instance.is_index,
-                             parents=[x.name for x in instance.parents],
+                             parents=instance.parents,
                              added=str(instance.added.isoformat()))
         return serialization
 
