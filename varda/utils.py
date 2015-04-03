@@ -373,7 +373,7 @@ def calculate_frequency(chromosome, position, reference, observed,
     end_position = position + max(1, len(reference)) - 1
     bins = all_bins(position, end_position)
 
-    if sample:
+    if sample and not inverse:
         observations, coverage = get_observations_and_coverage(
             chromosome=chromosome,
             position=position,
@@ -383,7 +383,7 @@ def calculate_frequency(chromosome, position, reference, observed,
             end_position=end_position,
             global_freq=False,
             exclude_checksum=exclude_checksum,
-            sample=sample
+            samples=[sample]
         )
 
     elif sample and inverse:
@@ -407,29 +407,24 @@ def calculate_frequency(chromosome, position, reference, observed,
             end_position=end_position,
             global_freq=False,
             exclude_checksum=exclude_checksum,
-            sample=sample
+            samples=[sample]
         )
 
         observations = global_obs.subtract(sample_obs)
         coverage = global_cov - sample_cov
 
-    elif multi_sample and not sample:
-        observations = collections.Counter()
-        coverage = 0
-        for s in multi_sample:
-            tmp_obs, tmp_cov = get_observations_and_coverage(
-                chromosome=chromosome,
-                position=position,
-                reference=reference,
-                observed=observed,
-                bins=bins,
-                end_position=end_position,
-                exclude_checksum=exclude_checksum,
-                global_freq=False,
-                sample=s
-            )
-            observations.update(tmp_obs)
-            coverage += tmp_cov
+    elif multi_sample and not sample and not inverse:
+        observations, coverage = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            exclude_checksum=exclude_checksum,
+            global_freq=False,
+            samples=multi_sample
+        )
 
     elif multi_sample and inverse and not sample:
         global_obs, global_cov = get_observations_and_coverage(
@@ -442,22 +437,17 @@ def calculate_frequency(chromosome, position, reference, observed,
             global_freq=True,
             exclude_checksum=exclude_checksum
         )
-        sample_obs = collections.Counter()
-        sample_cov = 0
-        for s in multi_sample:
-            tmp_obs, tmp_cov = get_observations_and_coverage(
-                chromosome=chromosome,
-                position=position,
-                reference=reference,
-                observed=observed,
-                bins=bins,
-                end_position=end_position,
-                exclude_checksum=exclude_checksum,
-                global_freq=False,
-                sample=s
-            )
-            sample_obs.update(tmp_obs)
-            sample_cov += tmp_cov
+        sample_obs, sample_cov = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            exclude_checksum=exclude_checksum,
+            global_freq=False,
+            samples=multi_sample
+        )
         observations = global_obs.subtract(sample_obs)
         coverage = global_cov - sample_cov
 
@@ -496,7 +486,7 @@ def calculate_frequency(chromosome, position, reference, observed,
 def get_observations_and_coverage(chromosome, position, reference, observed,
                                   bins, end_position,
                                   global_freq=True,
-                                  exclude_checksum=None, sample=None):
+                                  exclude_checksum=None, samples=None):
 
     if global_freq:
         observations = collections.Counter(dict(
@@ -532,19 +522,23 @@ def get_observations_and_coverage(chromosome, position, reference, observed,
                       reference=reference,
                       observed=observed).
             join(Variation).
-            filter_by(sample=sample).
+            join(Sample).
+            filter(Sample.id.in_([x.id for x in samples])).
             join(DataSource).
             filter(DataSource.checksum != exclude_checksum).
             group_by(Observation.zygosity)))
 
-        if sample.coverage_profile:
-            coverage = Region.query.join(Coverage).filter(
-                Region.chromosome == chromosome,
-                Region.begin <= position,
-                Region.end >= end_position,
-                Region.bin.in_(bins),
-                Coverage.sample == sample).count()
-        else:
-            coverage = sample.pool_size
+        coverage = 0
+        coverage_samples = [x for x in samples if x.coverage_profile]
+        uncovered_samples = [x for x in samples if not x.coverage_profile]
+        coverage += Region.query.join(Coverage).filter(
+                    Region.chromosome == chromosome,
+                    Region.begin <= position,
+                    Region.end >= end_position,
+                    Region.bin.in_(bins)).join(
+                    Sample).filter(
+                    Sample.id.in_([x.id for x in coverage_samples])).count()
+        for u in uncovered_samples:
+            coverage += u.pool_size
 
     return observations, coverage
