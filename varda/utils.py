@@ -524,6 +524,7 @@ def get_observations_and_coverage(chromosome, position, reference, observed,
             join(Variation).
             join(Sample).
             filter(Sample.id.in_([x.id for x in samples])).
+            filter_by(active=True, coverage_profile=True).
             join(DataSource).
             filter(DataSource.checksum != exclude_checksum).
             group_by(Observation.zygosity)))
