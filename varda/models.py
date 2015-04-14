@@ -246,7 +246,7 @@ class Group(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     
     #: Human readable name
-    name = db.Column(db.String(200))
+    name = db.Column(db.String(200), unique=True)
     
     #: date and time of creation
     added = db.Column(db.DateTime)
@@ -316,10 +316,9 @@ class Sample(db.Model):
     #: Set to true if the sample belongs to a set of samples, and this sample is the index
     is_index = db.Column(db.Boolean)
 
-    #: Classes `Sample` which are parents to this sample
-    parents = db.relationship('Sample')
-    child_id = db.Column(db.Integer, db.ForeignKey('sample.id'))
-
+    # ids of mother and father
+    mother = db.Column(db.Text)
+    father = db.Column(db.Text)
     def __init__(self, user, name, pool_size=1, coverage_profile=True,
                  public=False, notes=None, group=None):
         

@@ -319,11 +319,11 @@ def annotate_variants(original_variants, annotated_variants,
             for gr in groups:
                 group_results[gr.name].append(calculate_frequency(
                     chromosome, position, reference, observed,
-                    multi_sample=gr_samples[gr.name], exclude_checksum=exclude_checksum
+                    group=gr, exclude_checksum=exclude_checksum
                 ))
                 inverse_group_results[gr.name].append(calculate_frequency(
                     chromosome, position, reference, observed,
-                    multi_sample=gr_samples[gr.name], exclude_checksum=exclude_checksum,
+                    group=gr, exclude_checksum=exclude_checksum,
                     inverse=True
                 ))
 
@@ -593,7 +593,7 @@ def annotate_regions(original_regions, annotated_variants,
                 vn, vf = calculate_frequency(
                     observation.chromosome, observation.position,
                     observation.reference, observation.observed,
-                    multi_sample=gr_samples[gr.name], exclude_checksum=exclude_checksum
+                    group=gr, exclude_checksum=exclude_checksum
                 )
                 fields.extend([vn, sum(vf.values()), vf['heterozygous'],
                                vf['homozygous']])
@@ -602,7 +602,7 @@ def annotate_regions(original_regions, annotated_variants,
                 vn, vf = calculate_frequency(
                     observation.chromosome, observation.position,
                     observation.reference, observation.observed,
-                    exclude_checksum=exclude_checksum, multi_sample=gr_samples[igr.name],
+                    exclude_checksum=exclude_checksum, group=igr,
                     inverse=True
                 )
                 fields.extend([vn, sum(vf.values()), vf['heterozygous'],
