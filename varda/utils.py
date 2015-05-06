@@ -539,6 +539,10 @@ def get_observations_and_coverage(chromosome, position, reference, observed,
 
     elif group:
         samples = Sample.query.filter_by(group=group).filter_by(active=True).all()
+
+        if len(samples) == 0:
+            return None, 0
+
         observations = collections.Counter(dict(
             db.session.query(Observation.zygosity,
                              func.sum(Observation.support)).
