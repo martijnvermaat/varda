@@ -14,6 +14,7 @@ from __future__ import division
 import collections
 import hashlib
 import itertools
+import json
 
 from flask import current_app
 from sqlalchemy.sql import func
@@ -474,7 +475,7 @@ def calculate_frequency(chromosome, position, reference, observed,
 
     # Todo: Use constant definition for zygosity, probably shared with the
     #     one used in the models.
-    if not coverage:
+    if not coverage or not observations:
         return 0, {zygosity: 0
                    for zygosity in (None, 'homozygous', 'heterozygous')}
 
