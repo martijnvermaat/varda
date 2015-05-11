@@ -60,9 +60,7 @@ class SamplesResource(ModelResource):
                    'coverage_profile': {'type': 'boolean'},
                    'public': {'type': 'boolean'},
                    'notes': {'type': 'string', 'maxlength': 10000},
-                   'group': {'type': 'group'},
-                   'is_index': {'type': 'boolean'},
-                   'parents': {'type': 'sample'}}
+                   'group': {'type': 'group'}}
 
     delete_ensure_conditions = [has_role('admin'), owns_sample]
     delete_ensure_options = {'satisfy': any}
@@ -111,9 +109,6 @@ class SamplesResource(ModelResource):
                              coverage_profile=instance.coverage_profile,
                              active=instance.active,
                              notes=instance.notes,
-                             is_index=instance.is_index,
-                             mother=instance.mother,
-                             father=instance.father,
                              added=str(instance.added.isoformat()))
         return serialization
 

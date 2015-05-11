@@ -313,12 +313,6 @@ class Sample(db.Model):
     group = db.relationship(Group,
                             backref=db.backref('samples', lazy='dynamic'))
 
-    #: Set to true if the sample belongs to a set of samples, and this sample is the index
-    is_index = db.Column(db.Boolean)
-
-    # ids of mother and father
-    mother = db.Column(db.Text)
-    father = db.Column(db.Text)
     def __init__(self, user, name, pool_size=1, coverage_profile=True,
                  public=False, notes=None, group=None):
         
@@ -622,6 +616,10 @@ class Annotation(db.Model):
     sample_frequency = db.relationship(Sample, secondary=sample_frequency,
                                        cascade='all', passive_deletes=True)
 
+    #: Query field for groups. Should be a list of dictionaries, which is serialized by pickle
+    #: e.g. [{'group1': False, 'group2': True}, {'group1': True, 'group2': False}]
+    group_query = db.Column(db.PickleType)
+
     #: The original :class:`DataSource` that is being annotated.
     original_data_source = db.relationship(
         DataSource,
@@ -635,13 +633,14 @@ class Annotation(db.Model):
         backref=db.backref('annotation', uselist=False, lazy='select'))
 
     def __init__(self, original_data_source, annotated_data_source,
-                 global_frequency=True, sample_frequency=None):
+                 global_frequency=True, sample_frequency=None, group_query=None):
         sample_frequency = sample_frequency or []
 
         self.original_data_source = original_data_source
         self.annotated_data_source = annotated_data_source
         self.global_frequency = global_frequency
         self.sample_frequency = sample_frequency
+        self.group_query = group_query
 
     @detached_session_fix
     def __repr__(self):
