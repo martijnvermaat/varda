@@ -27,8 +27,7 @@ class SamplesResource(ModelResource):
 
     views = ['list', 'get', 'add', 'edit', 'delete']
 
-    embeddable = {'user': UsersResource,
-                  'group': GroupsResource}
+    embeddable = {'user': UsersResource}
     filterable = {'public': 'boolean',
                   'user': 'user',
                   'is_index': 'boolean',
@@ -113,7 +112,8 @@ class SamplesResource(ModelResource):
                              coverage_profile=instance.coverage_profile,
                              active=instance.active,
                              notes=instance.notes,
-                             added=str(instance.added.isoformat()))
+                             added=str(instance.added.isoformat()),
+                             group=[x.name for x in instance.group])
         return serialization
 
     @classmethod
