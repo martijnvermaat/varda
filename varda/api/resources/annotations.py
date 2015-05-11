@@ -71,7 +71,7 @@ class AnnotationsResource(TaskedResource):
                                        'schema': {'type': 'sample'}},
                   'group_query': {'type': 'list',
                                   'maxlength': 10,
-                                  'schema': {'type': 'dict', 'schema': {}}}}
+                                  'schema': {'type': 'dict', 'schema': {'allow_unknown': True}}}}
 
     delete_ensure_conditions = [has_role('admin'), owns_annotation]
     delete_ensure_options = {'satisfy': any}
