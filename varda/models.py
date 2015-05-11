@@ -236,6 +236,15 @@ class Token(db.Model):
     def __repr__(self):
         return '<Token %r>' % self.name
 
+group_membership = db.Table(
+    'group_membership', db.Model.metadata,
+    db.Column('sample_id', db.Integer,
+              db.ForeignKey('sample.id', ondelete='CASCADE'),
+              nullable=False),
+    db.Column('group_id', db.Integer,
+              db.ForeignKey('group.id', ondelete='CASCADE'),
+              nullable=False))
+
 class Group(db.Model):
     """
     Group (e.g. disease type)
@@ -591,14 +600,7 @@ sample_frequency = db.Table(
               db.ForeignKey('sample.id', ondelete='CASCADE'),
               nullable=False))
 
-group_membership = db.Table(
-    'group_membership', db.Model.metadata,
-    db.Column('sample_id', db.Integer,
-              db.ForeignKey('sample.id', ondelete='CASCADE'),
-              nullable=False),
-    db.Column('group_id', db.Integer,
-              db.ForeignKey('group.id', ondelete='CASCADE'),
-              nullable=False))
+
 
 class Annotation(db.Model):
     """
