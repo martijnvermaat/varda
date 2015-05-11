@@ -538,7 +538,7 @@ def get_observations_and_coverage(chromosome, position, reference, observed,
             coverage = sample.pool_size
 
     elif group:
-        samples = Sample.query.filter_by(group=group).filter_by(active=True).all()
+        samples = [x for x in Sample.query.filter_by(active=True).all() if group in x.group]
 
         if len(samples) == 0:
             return None, 0

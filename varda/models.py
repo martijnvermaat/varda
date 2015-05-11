@@ -310,12 +310,12 @@ class Sample(db.Model):
                            backref=db.backref('samples', lazy='dynamic'))
                            
     #: A :class:`Group` to which this sample belongs
-    group = db.relationship(Group,
-                            backref=db.backref('samples', lazy='dynamic'))
+    group = db.relationship(Group, secondary=group_membership,
+                            cascade='all', passive_deletes=True)
 
     def __init__(self, user, name, pool_size=1, coverage_profile=True,
                  public=False, notes=None, group=None):
-        
+
 
         self.user = user
         self.name = name
@@ -591,6 +591,14 @@ sample_frequency = db.Table(
               db.ForeignKey('sample.id', ondelete='CASCADE'),
               nullable=False))
 
+group_membership = db.Table(
+    'group_membership', db.Model.metadata,
+    db.Column('sample_id', db.Integer,
+              db.ForeignKey('sample.id', ondelete='CASCADE'),
+              nullable=False),
+    db.Column('group_id', db.Integer,
+              db.ForeignKey('group.id', ondelete='CASCADE'),
+              nullable=False))
 
 class Annotation(db.Model):
     """

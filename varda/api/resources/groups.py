@@ -33,7 +33,7 @@ class GroupsResource(ModelResource):
     
     # TODO: add owns_group function to security module
     edit_ensure_conditions = [has_role('admin'), owns_group]
-    edit_ensure_options = {'satisfy' : any}
+    edit_ensure_options = {'satisfy': any}
     edit_schema = {'name': {'type': 'string', 'required': True, 'maxlength': 200}}
     
     # TODO: add owns_group function to security module

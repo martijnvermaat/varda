@@ -48,7 +48,9 @@ class SamplesResource(ModelResource):
                   'coverage_profile': {'type': 'boolean'},
                   'public': {'type': 'boolean'},
                   'notes': {'type': 'string', 'maxlength': 10000},
-                  'group': {'type': 'group'},
+                  'group': {'type': 'list',
+                            'maxlength': 30,
+                            'schema': {'type': 'group'}},
                   'is_index': {'type': 'boolean'},
                   'parents': {'type': 'sample'}}
 
@@ -60,7 +62,9 @@ class SamplesResource(ModelResource):
                    'coverage_profile': {'type': 'boolean'},
                    'public': {'type': 'boolean'},
                    'notes': {'type': 'string', 'maxlength': 10000},
-                   'group': {'type': 'group'}}
+                   'group': {'type': 'list',
+                             'maxlength': 30,
+                             'schema': {'type': 'group'}}}
 
     delete_ensure_conditions = [has_role('admin'), owns_sample]
     delete_ensure_options = {'satisfy': any}
