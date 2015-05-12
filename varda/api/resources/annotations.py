@@ -69,9 +69,15 @@ class AnnotationsResource(TaskedResource):
                   'sample_frequency': {'type': 'list',
                                        'maxlength': 30,
                                        'schema': {'type': 'sample'}},
-                  'group_query': {'type': 'list',
-                                  'maxlength': 10,
-                                  'schema': {'type': 'dict', 'schema': {'allow_unknown': True}}}}
+                  'group_query':  {'maxlength': 10,
+                                   'schema': {'schema': {'exclude':
+                                                        {'schema': {'type': 'string'},
+                                                         'type': 'list'},
+                                                         'include':
+                                                        {'schema': {'type': 'string'},
+                                                         'type': 'list'}},
+                                              'type': 'dict'},
+                                   'type': 'list'}}
 
     delete_ensure_conditions = [has_role('admin'), owns_annotation]
     delete_ensure_options = {'satisfy': any}
@@ -181,13 +187,27 @@ class AnnotationsResource(TaskedResource):
         else:
             annotated_filetype = 'csv'
 
+        # Cerberus does not support allow_unknown in nested schema fields
+        # Therefore, the query is of slightly different type
+        # type should now be:
+        # [{'include': [a, b], 'exclude': [c,d]}, {'include': [e,f], 'exclude': [g, h]}, {...}]
+        # here we anneal that back to the original data type
+        queries = []
+        for x in group_query:
+            tmp = {}
+            for inc in x['include']:
+                tmp[inc] = True
+            for excl in x['exclude']:
+                tmp[excl] = False
+            queries.append(tmp)
+
         annotated_data_source = DataSource(g.user, name, annotated_filetype,
                                            empty=True, gzipped=True)
         db.session.add(annotated_data_source)
         annotation = Annotation(data_source, annotated_data_source,
                                 global_frequency=global_frequency,
                                 sample_frequency=sample_frequency,
-                                group_query=group_query)
+                                group_query=queries)
         db.session.add(annotation)
         db.session.commit()
         current_app.logger.info('Added data source: %r', annotated_data_source)
