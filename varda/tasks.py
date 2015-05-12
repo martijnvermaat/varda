@@ -345,10 +345,10 @@ def annotate_variants(original_variants, annotated_variants,
             record.add_info(label + '_VF_HET', [vf['heterozygous'] for _, vf in sample_result])
             record.add_info(label + '_VF_HOM', [vf['homozygous'] for _, vf in sample_result])
         for q_name, q_result in query_results.iteritems():
-            record.add_info(q_name + "_VN", [vn for vn, _ in q_result])
-            record.add_info(q_name + "_VF", [sum(vf.values()) for _, vf in q_result])
-            record.add_info(q_name + "_VF_HET", [vf['heterozygous'] for _, vf in q_result])
-            record.add_info(q_name + "_VF_HOM", [vf['homozygous'] for _, vf in q_result])
+            record.add_info(q_name + "_VN", q_result[0])
+            record.add_info(q_name + "_VF", sum(q_result[1].values()))
+            record.add_info(q_name + "_VF_HET", q_result[1]['heterozygous'])
+            record.add_info(q_name + "_VF_HOM", q_result[1]['homozygous'])
 
         writer.write_record(record)
 
