@@ -330,7 +330,10 @@ def annotate_variants(original_variants, annotated_variants,
                     for zygosity in (None, 'homozygous', 'heterozygous'):
                         vf[zygosity] += [i[zygosity]]
                 for zygo in vf.keys():
-                    vf[zygo] = sum(vf[zygo])/len(vf[zygo])
+                    if len(vf[zygo]) > 0:
+                        vf[zygo] = sum(vf[zygo])/len(vf[zygo])
+                    else:
+                        vf[zygo] = 0
                 query_results[q_name] = (vn, vf)
 
 
