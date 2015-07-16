@@ -504,7 +504,8 @@ class TestTasks(TestCase):
                                         original_filetype=data_source.filetype,
                                         annotated_filetype='vcf',
                                         original_records=records,
-                                        exclude_checksum=checksum)
+                                        exclude_checksum=checksum,
+                                        group_query=[{'include': ['dummy'], 'exclude': []}])
 
             lines = annotated_file.getvalue().split('\n')
             reader = vcf.Reader(lines)

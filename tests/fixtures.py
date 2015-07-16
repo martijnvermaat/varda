@@ -151,3 +151,8 @@ class AnnotationData(DataSet):
     class exome_annotation:
         original_data_source = DataSourceData.exome_variation
         annotated_data_source = DataSourceData.empty_variation
+
+        # fixture doesn't take PickleType! So this will fail
+        # not sure how to fix this. Fixture library hasn't been updated in years!
+        # should we move to e.g. mixer?
+        group_query = [{'include': ['dummy'], 'exclude': []}]
