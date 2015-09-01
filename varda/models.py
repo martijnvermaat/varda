@@ -248,15 +248,54 @@ class Token(db.Model):
     def __repr__(self):
         return '<Token %r>' % self.name
 
+group_membership = db.Table(
+    'group_membership', db.Model.metadata,
+    db.Column('sample_id', db.Integer,
+              db.ForeignKey('sample.id', ondelete='CASCADE'),
+              nullable=False),
+    db.Column('group_id', db.Integer,
+              db.ForeignKey('group.id', ondelete='CASCADE'),
+              nullable=False))
+
+class Group(db.Model):
+    """
+    Group (e.g. disease type)
+    """
+    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8"}
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    #: Human readable name
+    name = db.Column(db.String(200), unique=True)
+    
+    #: date and time of creation
+    added = db.Column(db.DateTime)
+    
+    #: the :class:`User` who created this sample
+    user = db.relationship(User,
+                           backref=db.backref('groups', lazy='dynamic'))
+    
+    def __init__(self, user, name):
+        self.user = user
+        self.name = name
+        self.added = datetime.now()
+        
+    @detached_session_fix
+    def __repr__(self):
+        return '<Group %r>' % (self.name) 
 
 class Sample(db.Model):
     """
     Sample (of one or more individuals).
     """
+    __tablename__ = 'sample'
     __table_args__ = {'mysql_engine': 'InnoDB', 'mysql_charset': 'utf8'}
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('group.id'),
+                               nullable=True)
 
     #: Human-readable name.
     name = db.Column(db.String(200))
@@ -290,9 +329,15 @@ class Sample(db.Model):
     #: The :class:`User` owning this sample.
     user = db.relationship(User,
                            backref=db.backref('samples', lazy='dynamic'))
+                           
+    #: A :class:`Group` to which this sample belongs
+    group = db.relationship(Group, secondary=group_membership,
+                            cascade='all', passive_deletes=True)
 
     def __init__(self, user, name, pool_size=1, coverage_profile=True,
-                 public=False, notes=None):
+                 public=False, notes=None, group=None):
+
+
         self.user = user
         self.name = name
         self.pool_size = pool_size
@@ -300,12 +345,13 @@ class Sample(db.Model):
         self.coverage_profile = coverage_profile
         self.public = public
         self.notes = notes
+        self.group = group
 
     @detached_session_fix
     def __repr__(self):
-        return '<Sample %r, pool_size=%r, active=%r, public=%r>' \
-            % (self.name, self.pool_size, self.active, self.public)
-
+        return '<Sample %r, pool_size=%r, active=%r, public=%r, group=%r>' \
+            % (self.name, self.pool_size, self.active, self.public, self.group)
+            
 
 class DataSource(db.Model):
     """
@@ -567,6 +613,7 @@ sample_frequency = db.Table(
               nullable=False))
 
 
+
 class Annotation(db.Model):
     """
     Annotation of a data source.
@@ -591,6 +638,10 @@ class Annotation(db.Model):
     sample_frequency = db.relationship(Sample, secondary=sample_frequency,
                                        cascade='all', passive_deletes=True)
 
+    #: Query field for groups. Should be a list of dictionaries, which is serialized by pickle
+    #: e.g. [{'group1': False, 'group2': True}, {'group1': True, 'group2': False}]
+    group_query = db.Column(db.PickleType)
+
     #: The original :class:`DataSource` that is being annotated.
     original_data_source = db.relationship(
         DataSource,
@@ -604,13 +655,14 @@ class Annotation(db.Model):
         backref=db.backref('annotation', uselist=False, lazy='select'))
 
     def __init__(self, original_data_source, annotated_data_source,
-                 global_frequency=True, sample_frequency=None):
+                 global_frequency=True, sample_frequency=None, group_query=None):
         sample_frequency = sample_frequency or []
 
         self.original_data_source = original_data_source
         self.annotated_data_source = annotated_data_source
         self.global_frequency = global_frequency
         self.sample_frequency = sample_frequency
+        self.group_query = group_query
 
     @detached_session_fix
     def __repr__(self):

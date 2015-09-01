@@ -14,12 +14,13 @@ from __future__ import division
 import collections
 import hashlib
 import itertools
+import json
 
 from flask import current_app
 from sqlalchemy.sql import func
 
 from . import db, genome
-from .models import Coverage, DataSource, Observation, Region, Sample, Variation
+from .models import Coverage, DataSource, Observation, Region, Sample, Variation, Group
 from .region_binning import all_bins
 
 
@@ -340,7 +341,8 @@ def read_genotype(call, prefer_likelihoods=False):
 
 
 def calculate_frequency(chromosome, position, reference, observed,
-                        sample=None, exclude_checksum=None):
+                        sample=None, exclude_checksum=None,
+                        group=None, inverse=False):
     """
     Calculate frequency for a variant.
 
@@ -362,32 +364,95 @@ def calculate_frequency(chromosome, position, reference, observed,
     end_position = position + max(1, len(reference)) - 1
     bins = all_bins(position, end_position)
 
-    if sample:
-        observations = collections.Counter(dict(
-            db.session.query(Observation.zygosity,
-                          func.sum(Observation.support)).
-            filter(Observation.bin.in_(bins)).
-            filter_by(chromosome=chromosome,
-                      position=position,
-                      reference=reference,
-                      observed=observed).
-            join(Variation).
-            filter_by(sample=sample).
-            join(DataSource).
-            filter(DataSource.checksum != exclude_checksum).
-            group_by(Observation.zygosity)))
+    if sample and not inverse:
+        observations, coverage = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            global_freq=False,
+            exclude_checksum=exclude_checksum,
+            sample=sample
+        )
 
-        if sample.coverage_profile:
-            coverage = Region.query.join(Coverage).filter(
-                Region.chromosome == chromosome,
-                Region.begin <= position,
-                Region.end >= end_position,
-                Region.bin.in_(bins),
-                Coverage.sample == sample).count()
-        else:
-            coverage = sample.pool_size
+    elif sample and inverse:
+        global_obs, global_cov = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            global_freq=True,
+            exclude_checksum=exclude_checksum
+        )
+
+        sample_obs, sample_cov = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            global_freq=False,
+            exclude_checksum=exclude_checksum,
+            sample=sample
+        )
+
+        observations = global_obs.subtract(sample_obs)
+        coverage = global_cov - sample_cov
+
+    elif group and not sample and not inverse:
+        observations, coverage = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            exclude_checksum=exclude_checksum,
+            global_freq=False,
+            group=group
+        )
+
+    elif group and inverse and not sample:
+        global_obs, global_cov = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            global_freq=True,
+            exclude_checksum=exclude_checksum
+        )
+        sample_obs, sample_cov = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            exclude_checksum=exclude_checksum,
+            global_freq=False,
+            group=group
+        )
+        observations = global_obs.subtract(sample_obs)
+        coverage = global_cov - sample_cov
 
     else:
+        observations, coverage = get_observations_and_coverage(
+            chromosome=chromosome,
+            position=position,
+            reference=reference,
+            observed=observed,
+            bins=bins,
+            end_position=end_position,
+            global_freq=True,
+            exclude_checksum=exclude_checksum
+        )
         # Frequency over entire database, except:
         #  - observations imported from data source with `exclude_checksum`
         #  - samples without coverage profile
@@ -397,6 +462,24 @@ def calculate_frequency(chromosome, position, reference, observed,
         # Todo: More seriously, also the corresponding region should be
         #     excluded. I see no real other way to do this than by excluding
         #     the entire sample.
+
+    # Todo: Use constant definition for zygosity, probably shared with the
+    #     one used in the models.
+    if not coverage or not observations:
+        return 0, {zygosity: 0
+                   for zygosity in (None, 'homozygous', 'heterozygous')}
+
+    frequency = {zygosity: observations[zygosity] / coverage
+                 for zygosity in (None, 'homozygous', 'heterozygous')}
+
+    return coverage, frequency
+
+def get_observations_and_coverage(chromosome, position, reference, observed,
+                                  bins, end_position,
+                                  global_freq=True,
+                                  exclude_checksum=None, sample=None, group=None):
+
+    if global_freq:
         observations = collections.Counter(dict(
             db.session.query(Observation.zygosity,
                           func.sum(Observation.support)).
@@ -420,13 +503,58 @@ def calculate_frequency(chromosome, position, reference, observed,
             Region.bin.in_(bins)).join(Sample).filter_by(
             active=True).count()
 
-    # Todo: Use constant definition for zygosity, probably shared with the
-    #     one used in the models.
-    if not coverage:
-        return 0, {zygosity: 0
-                   for zygosity in (None, 'homozygous', 'heterozygous')}
+    elif sample:
+        observations = collections.Counter(dict(
+            db.session.query(Observation.zygosity,
+                          func.sum(Observation.support)).
+            filter(Observation.bin.in_(bins)).
+            filter_by(chromosome=chromosome,
+                      position=position,
+                      reference=reference,
+                      observed=observed).
+            join(Variation).
+            filter_by(sample=sample).
+            join(DataSource).
+            filter(DataSource.checksum != exclude_checksum).
+            group_by(Observation.zygosity)))
+        if sample.coverage_profile:
+            coverage = Region.query.join(Coverage).filter(
+                Region.chromosome == chromosome,
+                Region.begin <= position,
+                Region.end >= end_position,
+                Region.bin.in_(bins),
+                Coverage.sample == sample).count()
+        else:
+            coverage = sample.pool_size
 
-    frequency = {zygosity: observations[zygosity] / coverage
-                 for zygosity in (None, 'homozygous', 'heterozygous')}
+    elif group:
+        samples = [x for x in Sample.query.filter_by(active=True).all() if group in x.group]
 
-    return coverage, frequency
+        if len(samples) == 0:
+            return None, 0
+
+        observations = collections.Counter(dict(
+            db.session.query(Observation.zygosity,
+                             func.sum(Observation.support)).
+            filter(Observation.bin.in_(bins)).
+            filter_by(chromosome=chromosome,
+                      position=position,
+                      reference=reference,
+                      observed=observed).
+            join(Variation).
+            join(Sample).
+            filter(Sample.id.in_([x.id for x in samples])).
+            join(DataSource).
+            filter(DataSource.checksum != exclude_checksum).
+            group_by(Observation.zygosity)
+        ))
+        coverage = Region.query.join(Coverage).filter(
+            Region.chromosome == chromosome,
+            Region.begin <= position,
+            Region.end >= end_position,
+            Region.bin.in_(bins)).join(Sample).filter(Sample.id.in_([x.id for x in samples])).count()
+
+    else:
+        raise ValueError
+
+    return observations, coverage

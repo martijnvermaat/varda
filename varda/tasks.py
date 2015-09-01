@@ -31,7 +31,7 @@ import vcf
 
 from . import db, celery
 from .models import (Annotation, Coverage, DataSource, DataUnavailable,
-                     Observation, Sample, Region, Variation)
+                     Observation, Sample, Region, Variation, Group)
 from .region_binning import all_bins
 from .utils import (calculate_frequency, digest, NoGenotypesInRecord,
                     normalize_variant, normalize_chromosome, normalize_region,
@@ -105,7 +105,8 @@ def annotate_data_source(original, annotated_variants,
 def annotate_variants(original_variants, annotated_variants,
                       original_filetype='vcf', annotated_filetype='vcf',
                       global_frequency=True, sample_frequency=None,
-                      original_records=1, exclude_checksum=None):
+                      original_records=1, exclude_checksum=None,
+                      group_query=None):
     """
     Read variants from a file and write them to another file with frequency
     annotation.
@@ -129,6 +130,8 @@ def annotate_variants(original_variants, annotated_variants,
     :arg exclude_checksum: Checksum of data source(s) to exclude variation
         from.
     :type exclude_checksum: str
+    :arg group_query: query list for groups.
+    :type group_query: list of dict
 
     Frequency information is annotated using fields in the INFO column. For
     the global frequency, we use the following fields:
@@ -170,6 +173,9 @@ def annotate_variants(original_variants, annotated_variants,
     population study such as 1KG can be modelled as one sample containing
     1092 individuals. As another example, to guarantee anonymity of clinical
     data, multiple individuals might be pooled into one sample.
+
+    Argument ``group_query`` should be a list of dicts containing groups frequencies.
+    It should be off the form `[{'group1': False, 'group2': True}, {'group1': True, 'group2': False}]`
     """
     # Todo: Here we should check again if the samples we use are active, since
     #     it could be a long time ago when this task was submitted.
@@ -232,6 +238,34 @@ def annotate_variants(original_variants, annotated_variants,
             'homozygous.'
             % sample.name)
 
+    queries = {}
+    for q in group_query:
+        q_name = ''
+        for key in q:
+            if q[key] == True:
+                q_name += 'AND' + key
+            else:
+                q_name += 'NOT' + key
+        queries.update({q_name: q})
+
+        reader.infos[q_name + "_VN"] = VcfInfo(
+            q_name + "_VN", vcf_field_counts['A'], 'Integer',
+            "Number of individuals having this region covered"
+        )
+        reader.infos[q_name + "_VF"] = VcfInfo(
+            q_name + "_VF", vcf_field_counts['A'], 'Float',
+            'Ratio of individuals in which the allele was found'
+        )
+        reader.infos[q_name + "_VF_HET"] = VcfInfo(
+            q_name + '_VF_HET', vcf_field_counts['A'], 'Float',
+            'Ratio of individuals in which the allele was found as heterozygous'
+        )
+        reader.infos[q_name + '_VF_HOM'] = VcfInfo(
+            q_name + "_VF_HOM", vcf_field_counts['A'], 'Float',
+            'Ratio of individuals in which the allele was found as homozygous'
+        )
+
+
     writer = vcf.Writer(annotated_variants, reader, lineterminator='\n')
 
     # Number of lines read (i.e. comparable to what is reported by
@@ -256,6 +290,7 @@ def annotate_variants(original_variants, annotated_variants,
 
         global_result = []
         sample_results = [[] for _ in sample_frequency]
+        query_results = {q_name: [] for q_name in queries}
         for index, allele in enumerate(record.ALT):
             try:
                 chromosome, position, reference, observed = normalize_variant(
@@ -275,6 +310,33 @@ def annotate_variants(original_variants, annotated_variants,
                         chromosome, position, reference, observed,
                         sample=sample, exclude_checksum=exclude_checksum))
 
+
+            for q_name in queries:
+                nots = [k for k in queries[q_name] if queries[q_name][k] is False]
+                yes = [k for k in queries[q_name] if queries[q_name][k] is True]
+                nots_results = [calculate_frequency(chromosome, position, reference,
+                                                    observed, group=x, exclude_checksum=exclude_checksum,
+                                                    inverse=True) for x in nots]
+                yes_results = [calculate_frequency(chromosome, position, reference,
+                                                   observed, group=x, exclude_checksum=exclude_checksum,
+                                                   inverse=False) for x in yes]
+                cov = [x for x, _ in nots_results]
+                cov += [x for x, _ in yes_results]
+                vn = sum(cov)
+                freq = [x for _, x in nots_results]
+                freq += [x for _, x in nots_results]
+                vf = {zygosity: [] for zygosity in (None, 'homozygous', 'heterozygous')}
+                for i in freq:
+                    for zygosity in (None, 'homozygous', 'heterozygous'):
+                        vf[zygosity] += [i[zygosity]]
+                for zygo in vf.keys():
+                    if len(vf[zygo]) > 0:
+                        vf[zygo] = sum(vf[zygo])/len(vf[zygo])
+                    else:
+                        vf[zygo] = 0
+                query_results[q_name] = (vn, vf)
+
+
         if global_frequency:
             record.add_info('GLOBAL_VN', [vn for vn, _ in global_result])
             record.add_info('GLOBAL_VF', [sum(vf.values()) for _, vf in global_result])
@@ -285,6 +347,11 @@ def annotate_variants(original_variants, annotated_variants,
             record.add_info(label + '_VF', [sum(vf.values()) for _, vf in sample_result])
             record.add_info(label + '_VF_HET', [vf['heterozygous'] for _, vf in sample_result])
             record.add_info(label + '_VF_HOM', [vf['homozygous'] for _, vf in sample_result])
+        for q_name, q_result in query_results.iteritems():
+            record.add_info(q_name + "_VN", q_result[0])
+            record.add_info(q_name + "_VF", sum(q_result[1].values()))
+            record.add_info(q_name + "_VF_HET", q_result[1]['heterozygous'])
+            record.add_info(q_name + "_VF_HOM", q_result[1]['homozygous'])
 
         writer.write_record(record)
 
@@ -292,7 +359,8 @@ def annotate_variants(original_variants, annotated_variants,
 def annotate_regions(original_regions, annotated_variants,
                      original_filetype='bed', annotated_filetype='csv',
                      global_frequency=True, sample_frequency=None,
-                     original_records=1, exclude_checksum=None):
+                     original_records=1, exclude_checksum=None,
+                     group_query=None):
     """
     Read regions from a file and write variant frequencies to another file.
 
@@ -374,6 +442,9 @@ def annotate_regions(original_regions, annotated_variants,
 
     header_fields = ['CHROMOSOME', 'POSITION', 'REFERENCE', 'OBSERVED']
 
+    groups = Group.query.all()
+    gr_samples = {gr.name: Sample.query.filter_by(group=gr).filter_by(active=True).all() for gr in groups}
+
     # Header line in CSV output for global frequencies.
     if global_frequency:
         header_fields.extend(['GLOBAL_VN', 'GLOBAL_VF', 'GLOBAL_VF_HET',
@@ -417,6 +488,68 @@ def annotate_regions(original_regions, annotated_variants,
         annotated_variants.write(
             '##' + label + '_VF_HOM: Ratio of individuals in %s in which the '
             'allele was observed as homozygous.\n' % sample.name)
+
+    # header lines in CSV output for group frequencies
+    for group in groups:
+        header_fields.extend([group.name + "_VN", group.name + "_VF",
+                              group.name + "_VF_HET", group.name + "_VF_HOM"])
+
+        header_fields.extend([group.name + "_INVERSE_VN", group.name + "_INVERSE_VF",
+                              group.name + "_INVERSE_VF_HET", group.name + "_INVERSE_VF_HOM"])
+
+        annotated_variants.write(
+            "##" + group.name + "_VN: Number of individuals in group"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_VF: Ratio of individuals in group in which "
+                                "the allele was observed"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_VF_HET: Ratio of individuals in group in which"
+                                "the allele was observed as heterozygous"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_VF_HOM: Ratio of individuals in group in which"
+                                "the allele wsa observed as homozygous"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VN: Number of individuals not in group"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VF: Ratio of individuals not in group in which "
+                                "the allele was observed"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VF_HET: Ratio of individuals not in group in which"
+                                "the allele was observed as heterozygous"
+        )
+        annotated_variants.write(
+            "##" + group.name + "_INVERSE_VF_HOM: Ratio of individuals not in group in which"
+                                "the allele wsa observed as homozygous"
+        )
+
+    queries = []
+    for q in group_query:
+        q_name = ''
+        for key in q:
+            if q[key] == True:
+                q_name += 'AND' + key
+            else:
+                q_name += 'NOT' + key
+        queries.append((q_name, q))
+        annotated_variants.write(
+            "##" + q_name + "_VN: Number of individuals in {0}".format(q_name)
+        )
+        annotated_variants.write(
+            "##" + q_name + "_VF: Ratio of individuals in which the allele was observed"
+        )
+        annotated_variants.write(
+            "##" + q_name + "_VF_HET: Ratio of individuals in which the allele was observed as heterozygous"
+        )
+        annotated_variants.write(
+            "##" + q_name + "_VF_HOM: Ratio of individuals in which the allele was observed as homozygous"
+        )
+
 
     annotated_variants.write('#' + '\t'.join(header_fields) + '\n')
 
@@ -484,6 +617,50 @@ def annotate_regions(original_regions, annotated_variants,
                     sample=sample, exclude_checksum=exclude_checksum)
                 fields.extend([vn, sum(vf.values()), vf['heterozygous'],
                                vf['homozygous']])
+            for gr in groups:
+                vn, vf = calculate_frequency(
+                    observation.chromosome, observation.position,
+                    observation.reference, observation.observed,
+                    group=gr, exclude_checksum=exclude_checksum
+                )
+                fields.extend([vn, sum(vf.values()), vf['heterozygous'],
+                               vf['homozygous']])
+
+            for igr in groups:
+                vn, vf = calculate_frequency(
+                    observation.chromosome, observation.position,
+                    observation.reference, observation.observed,
+                    exclude_checksum=exclude_checksum, group=igr,
+                    inverse=True
+                )
+                fields.extend([vn, sum(vf.values()), vf['heterozygous'],
+                               vf['homozygous']])
+
+            for q_name, q in queries:
+                nots = [k for k in q if q[k] is False]
+                yes = [k for k in q if q[k] is True]
+                nots_results = [calculate_frequency(observation.chromosome, observation.position,
+                                                    observation.reference, observation.observed,
+                                                    group=x, exclude_checksum=exclude_checksum,
+                                                    inverse=True) for x in nots]
+                yes_results = [calculate_frequency(observation.chromosome, observation.position,
+                                                   observation.reference, observation.observed,
+                                                   group=x, exclude_checksum=exclude_checksum,
+                                                   inverse=False) for x in yes]
+                cov = [x for x, _ in nots_results]
+                cov += [x for x, _ in yes_results]
+                vn = sum(cov)
+                freq = [x for _, x in nots_results]
+                freq += [x for _, x in nots_results]
+                vf = {zygosity: [] for zygosity in (None, 'homozygous', 'heterozygous')}
+                for i in freq:
+                    for zygosity in (None, 'homozygous', 'heterozygous'):
+                        vf[zygosity] += [i[zygosity]]
+                for zygo in vf.keys():
+                    vf[zygo] = sum(vf[zygo])/len(vf[zygo])
+                fields.extend([vn, sum(vf.values()), vf['heterozygoys'],
+                               vf['homozygous']])
+
 
             # Todo: Stringify per value, not in one sweep.
             annotated_variants.write('\t'.join(str(f) for f in fields) + '\n')
@@ -900,7 +1077,8 @@ def write_annotation(annotation_id):
                                  global_frequency=annotation.global_frequency,
                                  sample_frequency=annotation.sample_frequency,
                                  original_records=original_data_source.records,
-                                 exclude_checksum=original_data_source.checksum)
+                                 exclude_checksum=original_data_source.checksum,
+                                 group_query=annotation.group_query)
     except ReadError as e:
         annotated_data_source.empty()
         raise TaskError('invalid_data_source', str(e))

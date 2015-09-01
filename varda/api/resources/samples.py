@@ -13,6 +13,7 @@ from ...models import Sample
 from ..security import is_user, has_role, owns_sample, public_sample, true
 from .base import ModelResource
 from .users import UsersResource
+from .groups import GroupsResource
 
 
 class SamplesResource(ModelResource):
@@ -28,7 +29,9 @@ class SamplesResource(ModelResource):
 
     embeddable = {'user': UsersResource}
     filterable = {'public': 'boolean',
-                  'user': 'user'}
+                  'user': 'user',
+                  'is_index': 'boolean',
+                  'group': 'group'}
     orderable = ['name', 'pool_size', 'public', 'active', 'added']
 
     list_ensure_conditions = [has_role('admin'), is_user, true('public')]
@@ -43,7 +46,12 @@ class SamplesResource(ModelResource):
                   'pool_size': {'type': 'integer'},
                   'coverage_profile': {'type': 'boolean'},
                   'public': {'type': 'boolean'},
-                  'notes': {'type': 'string', 'maxlength': 10000}}
+                  'notes': {'type': 'string', 'maxlength': 10000},
+                  'group': {'type': 'list',
+                            'maxlength': 30,
+                            'schema': {'type': 'group'}},
+                  'is_index': {'type': 'boolean'},
+                  'parents': {'type': 'sample'}}
 
     edit_ensure_conditions = [has_role('admin'), owns_sample]
     edit_ensure_options = {'satisfy': any}
@@ -52,7 +60,10 @@ class SamplesResource(ModelResource):
                    'pool_size': {'type': 'integer'},
                    'coverage_profile': {'type': 'boolean'},
                    'public': {'type': 'boolean'},
-                   'notes': {'type': 'string', 'maxlength': 10000}}
+                   'notes': {'type': 'string', 'maxlength': 10000},
+                   'group': {'type': 'list',
+                             'maxlength': 30,
+                             'schema': {'type': 'group'}}}
 
     delete_ensure_conditions = [has_role('admin'), owns_sample]
     delete_ensure_options = {'satisfy': any}
@@ -89,6 +100,10 @@ class SamplesResource(ModelResource):
         **user** (`object`)
           :ref:`Link <api-links>` to a :ref:`user
           <api-resources-users-instances>` resource (embeddable).
+        
+        **group** (`object`)
+          :ref:`Link <api-links>` to a :ref:`group
+          <api-resources-groups-instances> group (embeddable)
         """
         serialization = super(SamplesResource, cls).serialize(instance, embed=embed)
         serialization.update(name=instance.name,
@@ -97,7 +112,8 @@ class SamplesResource(ModelResource):
                              coverage_profile=instance.coverage_profile,
                              active=instance.active,
                              notes=instance.notes,
-                             added=str(instance.added.isoformat()))
+                             added=str(instance.added.isoformat()),
+                             group=[x.name for x in instance.group])
         return serialization
 
     @classmethod
